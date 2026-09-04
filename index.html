@@ -77,6 +77,16 @@
   }
   .lede{ margin:22px auto 0; max-width:44ch; color:var(--bone-dim); font-size:clamp(15px,3.6vw,18px); line-height:1.5 }
   .hi{ color:var(--bone); font-weight:600 }
+  .namebox{ margin-top:28px }
+  .namebox input{
+    width:min(360px,82vw); text-align:center; font-family:var(--body);
+    padding:16px 18px; border-radius:14px; font-size:20px; color:var(--bone);
+    background:rgba(255,255,255,.06); border:1.5px solid rgba(255,120,90,.35);
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .namebox input:focus{ outline:none; border-color:var(--ember); box-shadow:0 0 0 4px rgba(255,59,48,.15) }
+  .namebox input::placeholder{ color:var(--bone-dim) }
+  .nameerr{ min-height:1.2em; margin-top:10px; color:var(--amber); font-size:14px }
 
   .btn{
     display:inline-flex; align-items:center; gap:12px; cursor:pointer; border:none;
@@ -246,9 +256,13 @@
     <div class="kicker">Baback · Cérémonie de la prime</div>
     <h1>Trouve<br>la balle</h1>
     <p class="lede" id="lede">
-      Trois gobelets. Une balle. <span class="hi">Un seul choix.</span><br>
-      Suis bien la balle du regard — ta <span class="hi">prime</span> est au bout.
+      Entre ton prénom, puis retrouve la balle sous les gobelets.<br>
+      Ta <span class="hi">prime</span> t'attend au bout.
     </p>
+    <div class="namebox">
+      <input id="namein" type="text" placeholder="Ton prénom" autocomplete="off" autocapitalize="words" />
+    </div>
+    <div class="nameerr" id="nameerr"></div>
     <button id="startBtn" class="btn big">Je tente ma chance ▸</button>
   </section>
 
@@ -320,15 +334,26 @@
 (function(){
   "use strict";
 
-  /* =========================================================
-     CONFIG — modifie ces valeurs par défaut si tu veux.
-     Elles peuvent aussi être surchargées par l'URL :
-        ?prime=2000&nom=Camille&devise=€
-     ========================================================= */
+  /* ======================================================================
+     ▼▼▼   RÉGLAGES DES PRIMES   ▼▼▼
+     ====================================================================== */
+  const PRIME_REDUITE  = 3000;    // prime pour les prénoms de la liste ci-dessous
+  const PRIME_STANDARD = 10000;   // prime pour tous les autres
+  const NOMS_REDUITS   = ["Stanislas", "Stan", "Sacha"];  // majuscules/accents ignorés
+  /* ======================================================================
+     ▲▲▲   (rien d'autre en dessous n'a besoin d'être touché)   ▲▲▲
+     ====================================================================== */
+
+  // normalise un prénom : minuscules, sans accents, sans espaces superflus
+  const normNom = (s)=>String(s).trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const REDUITS = new Set(NOMS_REDUITS.map(normNom));
+  const primePour = (nom)=> REDUITS.has(normNom(nom)) ? PRIME_REDUITE : PRIME_STANDARD;
+
   const CONFIG = {
-    prime:   1000,   // montant de la prime par défaut
-    devise:  "€",    // symbole monétaire
-    nom:     "",     // prénom du salarié (optionnel)
+    prime:   PRIME_STANDARD, // recalculé selon le prénom saisi
+    nom:     "",
+    devise:  "€",    // symbole monétaire (change-le si besoin)
     swaps:   24,     // nombre d'échanges de gobelets (difficulté ↑)
     vitesseMax: 330, // ms — le plus LENT (début du mélange)
     vitesseMin: 120  // ms — le plus RAPIDE (fin du mélange, sous stress)
@@ -361,12 +386,8 @@
     return s;
   }
 
-  // greet by name on start screen
-  if(CONFIG.nom){
-    $("lede").innerHTML =
-      'Salut <span class="hi">'+escapeHtml(CONFIG.nom)+'</span> !<br>'+
-      'Trois gobelets, une balle. Suis-la bien : ta <span class="hi">prime</span> est au bout.';
-  }
+  // pré-remplit le prénom si fourni dans l'URL (?nom=Camille)
+  if(CONFIG.nom){ $("namein").value = CONFIG.nom; }
   function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
   /* ---------------- cup layout & motion ---------------- */
@@ -583,7 +604,16 @@
   };
 
   /* ---------------- start ---------------- */
-  $("startBtn").onclick=()=>{ audio(); playRound(); };
+  function start(){
+    const nom=$("namein").value.trim();
+    if(!nom){ $("nameerr").textContent="Entre ton prénom pour jouer."; $("namein").focus(); return; }
+    $("nameerr").textContent="";
+    CONFIG.nom   = nom;
+    CONFIG.prime = primePour(nom);   // 3000 pour Stanislas/Stan/Sacha, sinon 10000
+    audio(); playRound();
+  }
+  $("startBtn").onclick=start;
+  $("namein").addEventListener("keydown",e=>{ if(e.key==="Enter") start(); });
   $("again").onclick=()=>{ winScreen.hidden=true; parts=[]; startScreen.hidden=false; gameScreen.hidden=true; };
 
   render(0);
